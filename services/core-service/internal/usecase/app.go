@@ -1,0 +1,54 @@
+package usecase
+
+import (
+	"errors"
+	"time"
+
+	"github.com/titipku/titipku-backend/internal/platform/apperror"
+	"github.com/titipku/titipku-backend/services/core-service/internal/domain"
+)
+
+type App struct {
+	store  Store
+	hasher PasswordHasher
+	tokens TokenIssuer
+	now    func() time.Time
+}
+
+func New(store Store, hasher PasswordHasher, tokens TokenIssuer, now func() time.Time) *App {
+	if now == nil {
+		now = time.Now
+	}
+
+	return &App{
+		store:  store,
+		hasher: hasher,
+		tokens: tokens,
+		now:    now,
+	}
+}
+
+func mapStoreError(err error, code, message string) error {
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return apperror.NotFound("NOT_FOUND", "requested resource was not found")
+	case errors.Is(err, domain.ErrEmailTaken):
+		return apperror.Conflict("EMAIL_TAKEN", "email is already registered")
+	case errors.Is(err, domain.ErrWhatsAppTaken):
+		return apperror.Conflict("WHATSAPP_TAKEN", "whatsapp number is already registered")
+	case errors.Is(err, domain.ErrConflict):
+		return apperror.Conflict("CONFLICT", "requested change conflicts with existing data")
+	case errors.Is(err, domain.ErrIdempotencyMismatch):
+		return apperror.Conflict("IDEMPOTENCY_MISMATCH", "idempotency key was already used with a different payload")
+	case errors.Is(err, domain.ErrStockMismatch):
+		return apperror.Conflict("STOCK_MISMATCH", "stock at partner no longer matches the submitted quantities")
+	case errors.Is(err, domain.ErrPaymentExceedsReceivable):
+		return apperror.Conflict("PAYMENT_EXCEEDS_RECEIVABLE", "payment exceeds the partner receivable")
+	case errors.Is(err, domain.ErrPaymentAllocation):
+		return apperror.Conflict("PAYMENT_ALLOCATION_FAILED", "payment could not be fully allocated")
+	case errors.Is(err, domain.ErrInconsistentData):
+		return apperror.Conflict("INCONSISTENT_DATA", "stored data is inconsistent")
+	default:
+		return apperror.Internal(code, message).WithCause(err)
+	}
+}
