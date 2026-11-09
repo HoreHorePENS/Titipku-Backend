@@ -42,30 +42,49 @@ func NewRouter(
 
 			router.Get("/auth/me", httpx.Handle(logger, handler.Me))
 
-			router.Get("/business", httpx.Handle(logger, handler.GetBusiness))
-			router.Patch("/business", httpx.Handle(logger, handler.UpdateBusiness))
+			// Katalog toko untuk peta: terbuka bagi semua persona yang login.
+			router.Get("/stores", httpx.Handle(logger, handler.ListStores))
+			router.Get("/stores/{storeID}", httpx.Handle(logger, handler.GetStore))
 
-			router.Get("/products", httpx.Handle(logger, handler.ListProducts))
-			router.Post("/products", httpx.Handle(logger, handler.CreateProduct))
-			router.Put("/products/{productID}", httpx.Handle(logger, handler.UpdateProduct))
-			router.Patch("/products/{productID}/status", httpx.Handle(logger, handler.SetProductActive))
+			// Area pemilik toko.
+			router.Group(func(router chi.Router) {
+				router.Use(httpx.RequireAccountTypes(identity.AccountTypePemilikToko))
 
-			router.Get("/partners", httpx.Handle(logger, handler.ListPartners))
-			router.Post("/partners", httpx.Handle(logger, handler.CreatePartner))
-			router.Put("/partners/{partnerID}", httpx.Handle(logger, handler.UpdatePartner))
-			router.Patch("/partners/{partnerID}/status", httpx.Handle(logger, handler.SetPartnerActive))
+				router.Get("/stores/mine", httpx.Handle(logger, handler.MyStore))
+				router.Post("/stores", httpx.Handle(logger, handler.CreateStore))
+				router.Put("/stores/mine", httpx.Handle(logger, handler.UpdateMyStore))
+				router.Patch("/stores/mine/status", httpx.Handle(logger, handler.SetMyStoreActive))
+			})
 
-			router.Get("/visits", httpx.Handle(logger, handler.ListVisits))
-			router.Post("/visits", httpx.Handle(logger, handler.CreateVisit))
-			router.Get("/visits/{visitID}", httpx.Handle(logger, handler.GetVisit))
+			// Area penitip (produsen): seluruh alur bisnis yang sudah ada.
+			router.Group(func(router chi.Router) {
+				router.Use(httpx.RequireAccountTypes(identity.AccountTypePenitip))
 
-			router.Get("/invoices", httpx.Handle(logger, handler.ListInvoices))
-			router.Get("/invoices/{invoiceID}", httpx.Handle(logger, handler.GetInvoice))
+				router.Get("/business", httpx.Handle(logger, handler.GetBusiness))
+				router.Patch("/business", httpx.Handle(logger, handler.UpdateBusiness))
 
-			router.Post("/payments", httpx.Handle(logger, handler.CreatePayment))
-			router.Post("/payments/{paymentID}/void", httpx.Handle(logger, handler.VoidPayment))
+				router.Get("/products", httpx.Handle(logger, handler.ListProducts))
+				router.Post("/products", httpx.Handle(logger, handler.CreateProduct))
+				router.Put("/products/{productID}", httpx.Handle(logger, handler.UpdateProduct))
+				router.Patch("/products/{productID}/status", httpx.Handle(logger, handler.SetProductActive))
 
-			router.Get("/dashboard", httpx.Handle(logger, handler.Dashboard))
+				router.Get("/partners", httpx.Handle(logger, handler.ListPartners))
+				router.Post("/partners", httpx.Handle(logger, handler.CreatePartner))
+				router.Put("/partners/{partnerID}", httpx.Handle(logger, handler.UpdatePartner))
+				router.Patch("/partners/{partnerID}/status", httpx.Handle(logger, handler.SetPartnerActive))
+
+				router.Get("/visits", httpx.Handle(logger, handler.ListVisits))
+				router.Post("/visits", httpx.Handle(logger, handler.CreateVisit))
+				router.Get("/visits/{visitID}", httpx.Handle(logger, handler.GetVisit))
+
+				router.Get("/invoices", httpx.Handle(logger, handler.ListInvoices))
+				router.Get("/invoices/{invoiceID}", httpx.Handle(logger, handler.GetInvoice))
+
+				router.Post("/payments", httpx.Handle(logger, handler.CreatePayment))
+				router.Post("/payments/{paymentID}/void", httpx.Handle(logger, handler.VoidPayment))
+
+				router.Get("/dashboard", httpx.Handle(logger, handler.Dashboard))
+			})
 		})
 	})
 

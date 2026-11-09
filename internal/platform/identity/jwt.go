@@ -12,11 +12,12 @@ import (
 var ErrInvalidToken = errors.New("invalid token")
 
 type Claims struct {
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Role       Role   `json:"role"`
-	BusinessID string `json:"business_id,omitempty"`
-	MemberID   string `json:"member_id,omitempty"`
+	Email       string      `json:"email"`
+	Name        string      `json:"name"`
+	Role        Role        `json:"role"`
+	AccountType AccountType `json:"account_type,omitempty"`
+	BusinessID  string      `json:"business_id,omitempty"`
+	MemberID    string      `json:"member_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -47,22 +48,24 @@ func NewTokenManager(secret, issuer string, ttl time.Duration) (*TokenManager, e
 }
 
 func (m *TokenManager) Issue(userID uuid.UUID, email, name string, role Role) (string, time.Time, error) {
-	return m.IssueScoped(userID, email, name, role, uuid.Nil, uuid.Nil)
+	return m.IssueScoped(userID, email, name, role, AccountTypePenitip, uuid.Nil, uuid.Nil)
 }
 
 func (m *TokenManager) IssueScoped(
 	userID uuid.UUID,
 	email, name string,
 	role Role,
+	accountType AccountType,
 	businessID, memberID uuid.UUID,
 ) (string, time.Time, error) {
 	now := m.now()
 	expiresAt := now.Add(m.ttl)
 
 	claims := Claims{
-		Email: email,
-		Name:  name,
-		Role:  role,
+		Email:       email,
+		Name:        name,
+		Role:        role,
+		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   userID.String(),
@@ -116,6 +119,15 @@ func (m *TokenManager) Verify(rawToken string) (Principal, error) {
 		return Principal{}, ErrInvalidToken
 	}
 
+	// Token lama tanpa claim account_type diperlakukan sebagai penitip.
+	accountType := claims.AccountType
+	if accountType == "" {
+		accountType = AccountTypePenitip
+	}
+	if !accountType.Valid() {
+		return Principal{}, ErrInvalidToken
+	}
+
 	var businessID, memberID uuid.UUID
 	if claims.BusinessID != "" {
 		businessID, err = uuid.Parse(claims.BusinessID)
@@ -131,11 +143,12 @@ func (m *TokenManager) Verify(rawToken string) (Principal, error) {
 	}
 
 	return Principal{
-		UserID:     userID,
-		Email:      claims.Email,
-		Name:       claims.Name,
-		Role:       claims.Role,
-		BusinessID: businessID,
-		MemberID:   memberID,
+		UserID:      userID,
+		Email:       claims.Email,
+		Name:        claims.Name,
+		Role:        claims.Role,
+		AccountType: accountType,
+		BusinessID:  businessID,
+		MemberID:    memberID,
 	}, nil
 }

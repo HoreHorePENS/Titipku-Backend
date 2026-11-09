@@ -5,16 +5,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/titipku/titipku-backend/internal/platform/identity"
 	"github.com/titipku/titipku-backend/services/core-service/internal/domain"
 	"github.com/titipku/titipku-backend/services/core-service/internal/usecase"
 )
 
 type userResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	FullName    string    `json:"full_name"`
+	Role        string    `json:"role"`
+	AccountType string    `json:"account_type"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type businessResponse struct {
@@ -26,11 +28,28 @@ type businessResponse struct {
 }
 
 type authResponse struct {
-	AccessToken string           `json:"access_token"`
-	TokenType   string           `json:"token_type"`
-	ExpiresAt   time.Time        `json:"expires_at"`
-	User        userResponse     `json:"user"`
-	Business    businessResponse `json:"business"`
+	AccessToken string          `json:"access_token"`
+	TokenType   string          `json:"token_type"`
+	ExpiresAt   time.Time       `json:"expires_at"`
+	User        userResponse    `json:"user"`
+	Business    *businessResponse `json:"business,omitempty"`
+	Store       *storeResponse  `json:"store,omitempty"`
+}
+
+type storeResponse struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Category     string   `json:"category"`
+	Description  *string  `json:"description,omitempty"`
+	Address      string   `json:"address"`
+	WhatsApp     string   `json:"whatsapp"`
+	Latitude     float64  `json:"latitude"`
+	Longitude    float64  `json:"longitude"`
+	PhotoURL     *string  `json:"photo_url,omitempty"`
+	IsActive     bool     `json:"is_active"`
+	HasConsigned bool     `json:"has_consigned"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type productResponse struct {
@@ -51,6 +70,7 @@ type partnerResponse struct {
 	OwnerName  string    `json:"owner_name"`
 	WhatsApp   string    `json:"whatsapp"`
 	Address    *string   `json:"address,omitempty"`
+	StoreID    *string   `json:"store_id,omitempty"`
 	IsActive   bool      `json:"is_active"`
 	Receivable int64     `json:"receivable"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -181,23 +201,64 @@ type publicInvoiceResponse struct {
 }
 
 func newAuthResponse(result *usecase.AuthResult) authResponse {
-	return authResponse{
+	response := authResponse{
 		AccessToken: result.Token,
 		TokenType:   "Bearer",
 		ExpiresAt:   result.ExpiresAt,
 		User:        newUserResponse(result.Account.User),
-		Business:    newBusinessResponse(result.Account.Business),
 	}
+
+	if result.Account.User.AccountType != string(identity.AccountTypePemilikToko) {
+		business := newBusinessResponse(result.Account.Business)
+		response.Business = &business
+	}
+	if result.Account.Store != nil {
+		store := newStoreResponse(*result.Account.Store)
+		response.Store = &store
+	}
+
+	return response
 }
 
 func newUserResponse(user domain.User) userResponse {
-	return userResponse{
-		ID:        user.ID.String(),
-		Email:     user.Email,
-		FullName:  user.FullName,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
+	accountType := user.AccountType
+	if accountType == "" {
+		accountType = string(identity.AccountTypePenitip)
 	}
+	return userResponse{
+		ID:          user.ID.String(),
+		Email:       user.Email,
+		FullName:    user.FullName,
+		Role:        user.Role,
+		AccountType: accountType,
+		CreatedAt:   user.CreatedAt,
+	}
+}
+
+func newStoreResponse(store domain.Store) storeResponse {
+	return storeResponse{
+		ID:           store.ID.String(),
+		Name:         store.Name,
+		Category:     store.Category,
+		Description:  store.Description,
+		Address:      store.Address,
+		WhatsApp:     store.WhatsApp,
+		Latitude:     store.Latitude,
+		Longitude:    store.Longitude,
+		PhotoURL:     store.PhotoURL,
+		IsActive:     store.IsActive,
+		HasConsigned: store.HasConsigned,
+		CreatedAt:    store.CreatedAt,
+		UpdatedAt:    store.UpdatedAt,
+	}
+}
+
+func newStoreResponses(stores []domain.Store) []storeResponse {
+	responses := make([]storeResponse, 0, len(stores))
+	for _, store := range stores {
+		responses = append(responses, newStoreResponse(store))
+	}
+	return responses
 }
 
 func newBusinessResponse(business domain.Business) businessResponse {
@@ -233,7 +294,7 @@ func newProductResponses(products []domain.Product) []productResponse {
 }
 
 func newPartnerResponse(partner domain.Partner) partnerResponse {
-	return partnerResponse{
+	response := partnerResponse{
 		ID:         partner.ID.String(),
 		Name:       partner.Name,
 		OwnerName:  partner.OwnerName,
@@ -244,6 +305,11 @@ func newPartnerResponse(partner domain.Partner) partnerResponse {
 		CreatedAt:  partner.CreatedAt,
 		UpdatedAt:  partner.UpdatedAt,
 	}
+	if partner.StoreID != nil {
+		storeID := partner.StoreID.String()
+		response.StoreID = &storeID
+	}
+	return response
 }
 
 func newPartnerResponses(partners []domain.Partner) []partnerResponse {

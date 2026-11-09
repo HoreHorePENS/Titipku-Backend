@@ -19,6 +19,13 @@ type Store interface {
 	UpsertProduct(ctx context.Context, product domain.Product) (*domain.Product, error)
 	SetProductActive(ctx context.Context, businessID, productID uuid.UUID, active bool) (*domain.Product, error)
 
+	ListStores(ctx context.Context, filter domain.StoreFilter) ([]domain.Store, error)
+	StoreByID(ctx context.Context, storeID uuid.UUID, viewerBusinessID *uuid.UUID) (*domain.Store, error)
+	StoreByOwnerUserID(ctx context.Context, userID uuid.UUID) (*domain.Store, error)
+	CreateStore(ctx context.Context, store domain.Store) (*domain.Store, error)
+	UpdateStore(ctx context.Context, store domain.Store) (*domain.Store, error)
+	SetStoreActive(ctx context.Context, ownerUserID, storeID uuid.UUID, active bool) (*domain.Store, error)
+
 	ListPartners(ctx context.Context, businessID uuid.UUID, activeOnly bool) ([]domain.Partner, error)
 	UpsertPartner(ctx context.Context, partner domain.Partner) (*domain.Partner, error)
 	SetPartnerActive(ctx context.Context, businessID, partnerID uuid.UUID, active bool) (*domain.Partner, error)
@@ -44,5 +51,5 @@ type PasswordHasher interface {
 }
 
 type TokenIssuer interface {
-	IssueScoped(userID uuid.UUID, email, name string, role identity.Role, businessID, memberID uuid.UUID) (string, time.Time, error)
+	IssueScoped(userID uuid.UUID, email, name string, role identity.Role, accountType identity.AccountType, businessID, memberID uuid.UUID) (string, time.Time, error)
 }
