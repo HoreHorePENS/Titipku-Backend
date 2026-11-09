@@ -81,7 +81,7 @@ Conventions:
 
 - Versioned paths under `/v1`.
 - Successful responses use a `data` envelope with optional `meta`.
-- Errors use an `error` object with a stable `code`, a human-readable `message`, and optional `fields`.
+- Errors use an `error` object with a stable `code`, a developer-facing `message`, and on `400` per-field `fields` plus machine-readable `field_codes`. See [docs/api-errors.md](docs/api-errors.md).
 - Protected endpoints require `Authorization: Bearer <token>`.
 - List endpoints use `limit` and `offset`.
 - Public invoice links use `/v1/public/invoices/{token}` and require no authentication. They are rate-limited per client IP.

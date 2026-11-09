@@ -19,6 +19,9 @@ type errorResponse struct {
 	Code    string            `json:"code"`
 	Message string            `json:"message"`
 	Fields  map[string]string `json:"fields,omitempty"`
+	// FieldCodes mirrors Fields with stable machine-readable codes
+	// (required, invalid_format, invalid_length, …). See docs/api-errors.md.
+	FieldCodes map[string]string `json:"field_codes,omitempty"`
 }
 
 type PageMeta struct {
@@ -51,9 +54,10 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 
 	write(w, statusForKind(appErr.Kind), response{
 		Error: &errorResponse{
-			Code:    appErr.Code,
-			Message: appErr.Message,
-			Fields:  appErr.Fields,
+			Code:       appErr.Code,
+			Message:    appErr.Message,
+			Fields:     appErr.Fields,
+			FieldCodes: appErr.FieldCodes(),
 		},
 		RequestID: requestIDFromContext(r.Context()),
 	})

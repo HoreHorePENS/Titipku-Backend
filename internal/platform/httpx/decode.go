@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/titipku/titipku-backend/internal/platform/apperror"
 )
@@ -61,5 +63,14 @@ func decodeError(err error) error {
 		return apperror.Validation(map[string]string{"body": "request body is required"})
 	}
 
-	return apperror.Validation(map[string]string{"body": err.Error()})
+	// encoding/json reports DisallowUnknownFields violations only as text:
+	// `json: unknown field "name"`. Report them against the offending field.
+	if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+		if name, unquoteErr := strconv.Unquote(field); unquoteErr == nil && name != "" {
+			return apperror.Validation(map[string]string{name: apperror.MessageUnknownField})
+		}
+	}
+
+	// Never echo raw decoder errors to clients.
+	return apperror.Validation(map[string]string{"body": "request body contains invalid JSON"})
 }
