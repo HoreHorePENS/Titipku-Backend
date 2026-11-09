@@ -4,15 +4,31 @@ import (
 	"net/http"
 
 	"github.com/titipku/titipku-backend/internal/platform/httpx"
+	"github.com/titipku/titipku-backend/internal/platform/identity"
 	"github.com/titipku/titipku-backend/services/core-service/internal/usecase"
 )
 
 type registerRequest struct {
-	BusinessName string `json:"business_name"`
-	OwnerName    string `json:"owner_name"`
-	Email        string `json:"email"`
-	WhatsApp     string `json:"whatsapp"`
-	Password     string `json:"password"`
+	// AccountType: "penitip" (default) atau "pemilik_toko".
+	AccountType  string           `json:"account_type"`
+	BusinessName string           `json:"business_name"`
+	OwnerName    string           `json:"owner_name"`
+	Email        string           `json:"email"`
+	WhatsApp     string           `json:"whatsapp"`
+	Password     string           `json:"password"`
+	Store        *registerStore   `json:"store,omitempty"`
+}
+
+// registerStore adalah detail toko saat mendaftar sebagai pemilik toko.
+type registerStore struct {
+	Name        string  `json:"name"`
+	Category    string  `json:"category"`
+	Description string  `json:"description"`
+	Address     string  `json:"address"`
+	WhatsApp    string  `json:"whatsapp"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	PhotoURL    string  `json:"photo_url"`
 }
 
 type loginRequest struct {
@@ -26,13 +42,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	result, err := h.app.Register(r.Context(), usecase.RegisterInput{
+	input := usecase.RegisterInput{
+		AccountType:  request.AccountType,
 		BusinessName: request.BusinessName,
 		OwnerName:    request.OwnerName,
 		Email:        request.Email,
 		WhatsApp:     request.WhatsApp,
 		Password:     request.Password,
-	})
+	}
+	if request.Store != nil {
+		input.Store = &usecase.RegisterStoreInput{
+			Name:        request.Store.Name,
+			Category:    request.Store.Category,
+			Description: request.Store.Description,
+			Address:     request.Store.Address,
+			WhatsApp:    request.Store.WhatsApp,
+			Latitude:    request.Store.Latitude,
+			Longitude:   request.Store.Longitude,
+			PhotoURL:    request.Store.PhotoURL,
+		}
+	}
+
+	result, err := h.app.Register(r.Context(), input)
 	if err != nil {
 		return err
 	}
@@ -70,10 +101,18 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{
-		"user":     newUserResponse(account.User),
-		"business": newBusinessResponse(account.Business),
-	})
+	payload := map[string]any{
+		"user": newUserResponse(account.User),
+	}
+	if account.User.AccountType == string(identity.AccountTypePemilikToko) {
+		if account.Store != nil {
+			payload["store"] = newStoreResponse(*account.Store)
+		}
+	} else {
+		payload["business"] = newBusinessResponse(account.Business)
+	}
+
+	httpx.WriteData(w, r, http.StatusOK, payload)
 	return nil
 }
 

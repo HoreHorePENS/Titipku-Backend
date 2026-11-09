@@ -12,7 +12,7 @@ import (
 
 const partnerQuery = `
 	SELECT
-		p.id, p.business_id, p.name, p.owner_name, p.whatsapp, p.address,
+		p.id, p.business_id, p.name, p.owner_name, p.whatsapp, p.address, p.store_id,
 		p.is_active, p.created_at, p.updated_at,
 		COALESCE((
 			SELECT SUM(i.total - i.paid)
@@ -52,11 +52,22 @@ func (s *Store) ListPartners(ctx context.Context, businessID uuid.UUID, activeOn
 }
 
 func (s *Store) UpsertPartner(ctx context.Context, partner domain.Partner) (*domain.Partner, error) {
+	// Dedup: partner yang sama dari toko katalog sudah pernah dititipkan.
+	if partner.StoreID != nil {
+		existing, err := s.partnerByStoreID(ctx, partner.BusinessID, *partner.StoreID)
+		if err == nil {
+			return existing, nil
+		}
+		if !errors.Is(err, domain.ErrNotFound) {
+			return nil, err
+		}
+	}
+
 	result, err := scanPartner(s.pool.QueryRow(ctx, `
 		INSERT INTO partners (
-			id, business_id, name, owner_name, whatsapp, address, is_active, created_at, updated_at
+			id, business_id, name, owner_name, whatsapp, address, store_id, is_active, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
 		ON CONFLICT (id) DO UPDATE
 		SET name = EXCLUDED.name,
 			owner_name = EXCLUDED.owner_name,
@@ -66,7 +77,7 @@ func (s *Store) UpsertPartner(ctx context.Context, partner domain.Partner) (*dom
 			updated_at = now()
 		WHERE partners.business_id = EXCLUDED.business_id
 		RETURNING
-			id, business_id, name, owner_name, whatsapp, address, is_active,
+			id, business_id, name, owner_name, whatsapp, address, store_id, is_active,
 			created_at, updated_at, 0::BIGINT
 	`,
 		partner.ID,
@@ -75,10 +86,17 @@ func (s *Store) UpsertPartner(ctx context.Context, partner domain.Partner) (*dom
 		partner.OwnerName,
 		partner.WhatsApp,
 		partner.Address,
+		partner.StoreID,
 		partner.IsActive,
 	))
 	if err != nil {
 		if isUniqueViolation(err) {
+			// Bentrok unique (whatsapp dalam bisnis atau store_id dobel).
+			if partner.StoreID != nil {
+				if existing, lookupErr := s.partnerByStoreID(ctx, partner.BusinessID, *partner.StoreID); lookupErr == nil {
+					return existing, nil
+				}
+			}
 			return nil, domain.ErrWhatsAppTaken
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -88,6 +106,12 @@ func (s *Store) UpsertPartner(ctx context.Context, partner domain.Partner) (*dom
 	}
 
 	return s.partnerByID(ctx, partner.BusinessID, result.ID)
+}
+
+func (s *Store) partnerByStoreID(ctx context.Context, businessID, storeID uuid.UUID) (*domain.Partner, error) {
+	return scanPartner(s.pool.QueryRow(ctx, partnerQuery+`
+		WHERE p.business_id = $1 AND p.store_id = $2
+	`, businessID, storeID))
 }
 
 func (s *Store) SetPartnerActive(ctx context.Context, businessID, partnerID uuid.UUID, active bool) (*domain.Partner, error) {
@@ -120,6 +144,7 @@ func scanPartner(row pgx.Row) (*domain.Partner, error) {
 		&partner.OwnerName,
 		&partner.WhatsApp,
 		&partner.Address,
+		&partner.StoreID,
 		&partner.IsActive,
 		&partner.CreatedAt,
 		&partner.UpdatedAt,

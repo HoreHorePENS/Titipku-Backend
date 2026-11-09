@@ -48,6 +48,10 @@ func mapStoreError(err error, code, message string) error {
 		return apperror.Conflict("PAYMENT_ALLOCATION_FAILED", "payment could not be fully allocated")
 	case errors.Is(err, domain.ErrInconsistentData):
 		return apperror.Conflict("INCONSISTENT_DATA", "stored data is inconsistent")
+	case errors.Is(err, domain.ErrStoreNotOwned):
+		return apperror.NotFound("STORE_NOT_FOUND", "requested store was not found")
+	case errors.Is(err, domain.ErrStoreExists):
+		return apperror.Conflict("STORE_EXISTS", "this account already has a store")
 	default:
 		return apperror.Internal(code, message).WithCause(err)
 	}
