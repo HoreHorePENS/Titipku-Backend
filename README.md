@@ -128,3 +128,52 @@ The visit response includes a public invoice URL and a `wa.me` share URL. Warung
 
 The `services/auth-service`, `services/user-service`, and `services/order-service` packages remain only for reference. Their customer/courier/order model does not match the consignment domain and they are excluded from the Compose stack.
 
+
+## Docker & CI
+
+The `Dockerfile` builds a single service (default `core-service`) into a static binary on `golang:1.26.10-alpine3.24` and runs it on `alpine:3.24.4` as the non-root user `app` (UID 10001). The image contains only the binary — no source and no `.env`; configuration comes from environment variables at runtime. The container listens on **8080** and has a `HEALTHCHECK` against `/healthz`.
+
+### Build & run locally
+
+```bash
+docker build -t titipku-backend:local .
+```
+
+The service needs PostgreSQL at startup (migrations run automatically):
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL="postgres://titipku:titipku@host.docker.internal:5432/titipku?sslmode=disable" \
+  -e JWT_SECRET="<at-least-32-characters>" \
+  -e CORS_ALLOWED_ORIGINS="http://localhost:3000" \
+  titipku-backend:local
+```
+
+Then check `http://localhost:8080/healthz` and `http://localhost:8080/readyz`. To build a legacy scaffold service instead, pass `--build-arg SERVICE=auth-service` (or `user-service`, `order-service`).
+
+### Image on GitHub Container Registry
+
+`.github/workflows/docker.yml` builds `core-service` on every push/PR and publishes it as:
+
+```
+ghcr.io/horehorepens/titipku-backend
+```
+
+| Event | Pushed to GHCR? | Tags |
+| --- | --- | --- |
+| push to `main` | yes | `main`, `sha-<7 chars>`, `latest` |
+| push to `dev` | yes | `dev`, `sha-<7 chars>` |
+| `workflow_dispatch` (manual) | yes | `<branch-name>`, `sha-<7 chars>` (+ `latest` when run on `main`) |
+| pull request to `main`/`dev` | no (build only) | — |
+
+### Pull the image
+
+```bash
+# For a private package, log in first with a PAT that has read:packages
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+
+docker pull ghcr.io/horehorepens/titipku-backend:latest   # latest main build
+docker pull ghcr.io/horehorepens/titipku-backend:dev      # latest dev build
+```
+
+No build-time variables or secrets are needed. Runtime variables (`DATABASE_URL`, `JWT_SECRET`, …) are set by the deployment environment — see the table above.

@@ -1,9 +1,39 @@
+# VCS & CI
 .git
 .gitignore
+.github
+
+# Environment / rahasia — jangan pernah masuk ke build context
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Build output & coverage
 bin
 coverage.out
-.env
-**/.env
+*.test
+*.out
+
+# Log
 *.log
+logs
+
+# Output test / screenshot
+test-results
+testdata/output
+screenshots
+
+# Editor & OS
 .idea
 .vscode
+.DS_Store
+
+# Tidak dibutuhkan saat build
+Dockerfile
+.dockerignore
+.editorconfig
+.golangci.yml
+Makefile
+*.md
