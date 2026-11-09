@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/titipku/titipku-backend/internal/platform/apperror"
+	"github.com/titipku/titipku-backend/internal/platform/imageupload"
 	"github.com/titipku/titipku-backend/services/core-service/internal/domain"
 )
 
@@ -110,7 +111,9 @@ func (a *App) UpsertProduct(ctx context.Context, businessID uuid.UUID, input Pro
 	}
 
 	var photoPath *string
-	if path := strings.TrimSpace(input.PhotoPath); path != "" {
+	// Foto produk diatur lewat PUT/DELETE /v1/products/{id}/photo. Pada update,
+	// repository mempertahankan foto lama; URL eksternal sembarang diabaikan.
+	if path := strings.TrimSpace(input.PhotoPath); imageupload.IsUploadedPath(path) {
 		photoPath = &path
 	}
 

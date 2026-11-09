@@ -9,19 +9,30 @@ import (
 	"github.com/google/uuid"
 	"github.com/titipku/titipku-backend/internal/platform/apperror"
 	"github.com/titipku/titipku-backend/internal/platform/httpx"
+	"github.com/titipku/titipku-backend/internal/platform/imageupload"
 	"github.com/titipku/titipku-backend/services/core-service/internal/usecase"
 )
 
 type Handler struct {
-	app        *usecase.App
-	webBaseURL string
+	app            *usecase.App
+	webBaseURL     string
+	maxUploadBytes int64
 }
 
 func NewHandler(app *usecase.App, webBaseURL string) *Handler {
 	return &Handler{
-		app:        app,
-		webBaseURL: strings.TrimRight(webBaseURL, "/"),
+		app:            app,
+		webBaseURL:     strings.TrimRight(webBaseURL, "/"),
+		maxUploadBytes: imageupload.DefaultMaxBytes,
 	}
+}
+
+// WithMaxUploadBytes mengatur batas ukuran file foto yang diterima.
+func (h *Handler) WithMaxUploadBytes(maxBytes int64) *Handler {
+	if maxBytes > 0 {
+		h.maxUploadBytes = maxBytes
+	}
+	return h
 }
 
 func (h *Handler) scope(r *http.Request) (uuid.UUID, uuid.UUID, error) {

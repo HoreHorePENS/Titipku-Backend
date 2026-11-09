@@ -24,6 +24,9 @@ var (
 	ErrInconsistentData         = errors.New("inconsistent data")
 	ErrStoreNotOwned            = errors.New("store is not owned by this account")
 	ErrStoreExists              = errors.New("account already has a store")
+	ErrProposalPending          = errors.New("a pending proposal already exists for this store and business")
+	ErrAlreadyPartners          = errors.New("store and business are already partners")
+	ErrProposalNotPending       = errors.New("proposal is no longer pending")
 )
 
 const (
@@ -125,9 +128,9 @@ type Store struct {
 type StoreFilter struct {
 	// MinLat/MaxLat/MinLng/MaxLng adalah viewport peta (opsional).
 	MinLat, MaxLat, MinLng, MaxLng *float64
-	Category                        string
-	Search                          string
-	ActiveOnly                      bool
+	Category                       string
+	Search                         string
+	ActiveOnly                     bool
 	// ViewerBusinessID diisi agar field HasConsigned ikut dihitung.
 	ViewerBusinessID *uuid.UUID
 	Limit            int

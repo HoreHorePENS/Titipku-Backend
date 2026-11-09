@@ -13,6 +13,9 @@ type App struct {
 	hasher PasswordHasher
 	tokens TokenIssuer
 	now    func() time.Time
+
+	images        ImageStore
+	maxImageBytes int64
 }
 
 func New(store Store, hasher PasswordHasher, tokens TokenIssuer, now func() time.Time) *App {
@@ -50,6 +53,12 @@ func mapStoreError(err error, code, message string) error {
 		return apperror.Conflict("INCONSISTENT_DATA", "stored data is inconsistent")
 	case errors.Is(err, domain.ErrStoreNotOwned):
 		return apperror.NotFound("STORE_NOT_FOUND", "requested store was not found")
+	case errors.Is(err, domain.ErrProposalPending):
+		return apperror.Conflict("PROPOSAL_PENDING", "a pending proposal already exists between this store and producer")
+	case errors.Is(err, domain.ErrAlreadyPartners):
+		return apperror.Conflict("ALREADY_PARTNERS", "this store and producer are already partners")
+	case errors.Is(err, domain.ErrProposalNotPending):
+		return apperror.Conflict("PROPOSAL_NOT_PENDING", "proposal is no longer pending")
 	case errors.Is(err, domain.ErrStoreExists):
 		return apperror.Conflict("STORE_EXISTS", "this account already has a store")
 	default:

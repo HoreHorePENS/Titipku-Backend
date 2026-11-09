@@ -55,7 +55,7 @@ func (s *Store) UpsertProduct(ctx context.Context, product domain.Product) (*dom
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
 		ON CONFLICT (id) DO UPDATE
 		SET name = EXCLUDED.name,
-			photo_path = EXCLUDED.photo_path,
+			photo_path = products.photo_path, -- foto hanya diubah lewat endpoint foto
 			consign_price = EXCLUDED.consign_price,
 			retail_price = EXCLUDED.retail_price,
 			shelf_life_days = EXCLUDED.shelf_life_days,

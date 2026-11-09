@@ -14,6 +14,8 @@ import (
 type RouterOptions struct {
 	AllowedOrigins           []string
 	PublicRateLimitPerMinute int
+	// Uploads menyajikan foto unggahan di /uploads/* (opsional).
+	Uploads http.Handler
 }
 
 func NewRouter(
@@ -25,6 +27,11 @@ func NewRouter(
 ) http.Handler {
 	router := httpx.NewRouter(logger, options.AllowedOrigins...)
 	health.Register(router, pinger)
+
+	if options.Uploads != nil {
+		// Foto toko/produk bersifat publik (ditampilkan di kartu) dan bernama acak.
+		router.Handle("/uploads/*", options.Uploads)
+	}
 
 	router.Route("/v1", func(router chi.Router) {
 		router.Post("/auth/register", httpx.Handle(logger, handler.Register))
@@ -46,6 +53,13 @@ func NewRouter(
 			router.Get("/stores", httpx.Handle(logger, handler.ListStores))
 			router.Get("/stores/{storeID}", httpx.Handle(logger, handler.GetStore))
 
+			// Proposal kemitraan dua arah: tawaran toko & pengajuan penitip.
+			router.Get("/proposals", httpx.Handle(logger, handler.ListProposals))
+			router.Post("/proposals", httpx.Handle(logger, handler.CreateProposal))
+			router.Post("/proposals/{proposalID}/accept", httpx.Handle(logger, handler.AcceptProposal))
+			router.Post("/proposals/{proposalID}/reject", httpx.Handle(logger, handler.RejectProposal))
+			router.Post("/proposals/{proposalID}/cancel", httpx.Handle(logger, handler.CancelProposal))
+
 			// Area pemilik toko.
 			router.Group(func(router chi.Router) {
 				router.Use(httpx.RequireAccountTypes(identity.AccountTypePemilikToko))
@@ -54,6 +68,11 @@ func NewRouter(
 				router.Post("/stores", httpx.Handle(logger, handler.CreateStore))
 				router.Put("/stores/mine", httpx.Handle(logger, handler.UpdateMyStore))
 				router.Patch("/stores/mine/status", httpx.Handle(logger, handler.SetMyStoreActive))
+				router.Put("/stores/mine/photo", httpx.Handle(logger, handler.PutMyStorePhoto))
+				router.Delete("/stores/mine/photo", httpx.Handle(logger, handler.DeleteMyStorePhoto))
+
+				// Katalog produsen penitip (beserta produk aktif) untuk ditawari.
+				router.Get("/producers", httpx.Handle(logger, handler.ListProducers))
 			})
 
 			// Area penitip (produsen): seluruh alur bisnis yang sudah ada.
@@ -67,6 +86,8 @@ func NewRouter(
 				router.Post("/products", httpx.Handle(logger, handler.CreateProduct))
 				router.Put("/products/{productID}", httpx.Handle(logger, handler.UpdateProduct))
 				router.Patch("/products/{productID}/status", httpx.Handle(logger, handler.SetProductActive))
+				router.Put("/products/{productID}/photo", httpx.Handle(logger, handler.PutProductPhoto))
+				router.Delete("/products/{productID}/photo", httpx.Handle(logger, handler.DeleteProductPhoto))
 
 				router.Get("/partners", httpx.Handle(logger, handler.ListPartners))
 				router.Post("/partners", httpx.Handle(logger, handler.CreatePartner))

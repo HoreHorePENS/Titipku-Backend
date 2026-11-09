@@ -72,6 +72,7 @@ Migrations run automatically at startup.
 | `PUBLIC_WEB_URL` | No | `http://localhost:3000` | Frontend base URL for invoice links |
 | `CORS_ALLOWED_ORIGINS` | No | `http://localhost:3000` | Comma-separated browser origins |
 | `PUBLIC_RATE_LIMIT_PER_MINUTE` | No | `60` | Per-IP public invoice limit; `0` disables it |
+| `UPLOAD_DIR` | No | `/data/uploads` | Directory for store/product photos, served at `/uploads/*`. **Mount it as a volume in Docker.** |
 
 ## API documentation
 
@@ -85,6 +86,29 @@ Conventions:
 - Protected endpoints require `Authorization: Bearer <token>`.
 - List endpoints use `limit` and `offset`.
 - Public invoice links use `/v1/public/invoices/{token}` and require no authentication. They are rate-limited per client IP.
+
+### Consignment proposals & producers
+
+Two-way partnership requests between a store (`pemilik_toko`) and a producer (`penitip`):
+
+| Method & path | Who | Purpose |
+| --- | --- | --- |
+| `GET /v1/proposals?direction=&status=` | both | Proposals involving the caller (`store_to_penitip` = offer, `penitip_to_store` = request) |
+| `POST /v1/proposals` | both | Store owner sends `business_id` (+ message, shelf_location, estimated_capacity); producer sends `store_id` (+ message, items `[{product_id, qty}]`) |
+| `POST /v1/proposals/{id}/accept` / `reject` | recipient | Accepting links the store as an active partner of the producer |
+| `POST /v1/proposals/{id}/cancel` | sender | Cancel while pending |
+| `GET /v1/producers?q=` | store owner | Producers with at least one active product, their products and relationship status |
+
+Conflicts: `409 PROPOSAL_PENDING`, `409 ALREADY_PARTNERS`, `409 PROPOSAL_NOT_PENDING`, `409 STORE_INACTIVE`.
+
+### Photos
+
+| Method & path | Who |
+| --- | --- |
+| `PUT` / `DELETE /v1/stores/mine/photo` | store owner |
+| `PUT` / `DELETE /v1/products/{id}/photo` | producer owning the product |
+
+`PUT` takes `multipart/form-data` with field `file` (JPG/PNG/WebP, max 5 MB, max 8000 px per side). The type is detected from the file content, EXIF/GPS/XMP metadata is removed, and the file gets a random name. Files are served publicly at `/uploads/<random>.<ext>` (`nosniff`, immutable cache); replaced photos are deleted. `photo_url` / `photo_path` in the JSON store/product endpoints are ignored; photos change only through these endpoints. Validation errors use `field_codes.file` (`invalid_choice`, `invalid_length`, `out_of_range`, `invalid_format`).
 
 ## Common commands
 
@@ -143,10 +167,23 @@ The service needs PostgreSQL at startup (migrations run automatically):
 
 ```bash
 docker run --rm -p 8080:8080 \
+  -v titipku-uploads:/data/uploads \
   -e DATABASE_URL="postgres://titipku:titipku@host.docker.internal:5432/titipku?sslmode=disable" \
   -e JWT_SECRET="<at-least-32-characters>" \
   -e CORS_ALLOWED_ORIGINS="http://localhost:3000" \
   titipku-backend:local
+```
+
+Photos are written to `UPLOAD_DIR` (default `/data/uploads`, declared as a `VOLUME`). Always mount a named volume or host directory there, otherwise uploaded photos are lost when the container is recreated. In Compose:
+
+```yaml
+services:
+  core-service:
+    image: ghcr.io/horehorepens/titipku-backend:latest
+    volumes:
+      - titipku-uploads:/data/uploads
+volumes:
+  titipku-uploads:
 ```
 
 Then check `http://localhost:8080/healthz` and `http://localhost:8080/readyz`. To build a legacy scaffold service instead, pass `--build-arg SERVICE=auth-service` (or `user-service`, `order-service`).

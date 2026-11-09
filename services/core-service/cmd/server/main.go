@@ -14,6 +14,7 @@ import (
 	"github.com/titipku/titipku-backend/internal/platform/database"
 	"github.com/titipku/titipku-backend/internal/platform/httpserver"
 	"github.com/titipku/titipku-backend/internal/platform/identity"
+	"github.com/titipku/titipku-backend/internal/platform/imageupload"
 	"github.com/titipku/titipku-backend/internal/platform/logger"
 	"github.com/titipku/titipku-backend/services/core-service/internal/adapter/httpapi"
 	"github.com/titipku/titipku-backend/services/core-service/internal/adapter/repository/postgres"
@@ -55,9 +56,18 @@ func run() error {
 		return fmt.Errorf("create token manager: %w", err)
 	}
 
+	uploadDir := config.String("UPLOAD_DIR", "/data/uploads")
+	images, err := imageupload.NewStorage(uploadDir)
+	if err != nil {
+		return fmt.Errorf("prepare UPLOAD_DIR: %w", err)
+	}
+	log.Info("photo uploads enabled", "dir", images.Dir())
+
 	store := postgres.NewStore(db.Pool)
-	app := usecase.New(store, identity.NewPasswordHasher(), tokenManager, time.Now)
-	handler := httpapi.NewHandler(app, config.String("PUBLIC_WEB_URL", "http://localhost:3000"))
+	app := usecase.New(store, identity.NewPasswordHasher(), tokenManager, time.Now).
+		WithImageStore(images, imageupload.DefaultMaxBytes)
+	handler := httpapi.NewHandler(app, config.String("PUBLIC_WEB_URL", "http://localhost:3000")).
+		WithMaxUploadBytes(imageupload.DefaultMaxBytes)
 
 	publicRateLimit, err := config.Int("PUBLIC_RATE_LIMIT_PER_MINUTE", 60)
 	if err != nil {
@@ -71,6 +81,7 @@ func run() error {
 	router := httpapi.NewRouter(handler, log, tokenManager, db, httpapi.RouterOptions{
 		AllowedOrigins:           corsOrigins,
 		PublicRateLimitPerMinute: publicRateLimit,
+		Uploads:                  images.Handler(),
 	})
 
 	server := httpserver.New(cfg.HTTPAddress, router, cfg.ShutdownTimeout)
