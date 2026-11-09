@@ -10,11 +10,13 @@ import (
 )
 
 type partnerRequest struct {
-	Name      string `json:"name"`
-	OwnerName string `json:"owner_name"`
-	WhatsApp  string `json:"whatsapp"`
-	Address   string `json:"address"`
-	IsActive  *bool  `json:"is_active"`
+	Name      string  `json:"name"`
+	OwnerName string  `json:"owner_name"`
+	WhatsApp  string  `json:"whatsapp"`
+	Address   string  `json:"address"`
+	IsActive  *bool   `json:"is_active"`
+	// StoreID diisi bila menambahkan toko dari katalog peta.
+	StoreID   *string `json:"store_id"`
 }
 
 func (h *Handler) ListPartners(w http.ResponseWriter, r *http.Request) error {
@@ -55,6 +57,15 @@ func (h *Handler) savePartner(w http.ResponseWriter, r *http.Request, partnerID 
 		return err
 	}
 
+	var storeID *uuid.UUID
+	if request.StoreID != nil && *request.StoreID != "" {
+		parsed, err := uuid.Parse(*request.StoreID)
+		if err != nil {
+			return apperror.Validation(map[string]string{"store_id": "must be a valid uuid"})
+		}
+		storeID = &parsed
+	}
+
 	partner, err := h.app.UpsertPartner(r.Context(), businessID, usecase.PartnerInput{
 		ID:        partnerID,
 		Name:      request.Name,
@@ -62,6 +73,7 @@ func (h *Handler) savePartner(w http.ResponseWriter, r *http.Request, partnerID 
 		WhatsApp:  request.WhatsApp,
 		Address:   request.Address,
 		IsActive:  request.IsActive,
+		StoreID:   storeID,
 	})
 	if err != nil {
 		return err

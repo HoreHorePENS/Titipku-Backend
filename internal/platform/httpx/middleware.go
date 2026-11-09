@@ -142,6 +142,38 @@ func RequireRoles(roles ...identity.Role) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireAccountTypes membatasi akses ke persona akun tertentu
+// (identity.AccountTypePenitip / identity.AccountTypePemilikToko).
+// Token lama tanpa claim account_type diperlakukan sebagai penitip.
+func RequireAccountTypes(accountTypes ...identity.AccountType) func(http.Handler) http.Handler {
+	allowed := make(map[identity.AccountType]struct{}, len(accountTypes))
+	for _, accountType := range accountTypes {
+		allowed[accountType] = struct{}{}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			principal, ok := identity.PrincipalFrom(r.Context())
+			if !ok {
+				WriteError(w, r, apperror.Unauthorized(apperror.CodeUnauthorized, "authentication is required"))
+				return
+			}
+
+			accountType := principal.AccountType
+			if accountType == "" {
+				accountType = identity.AccountTypePenitip
+			}
+
+			if _, ok := allowed[accountType]; !ok {
+				WriteError(w, r, apperror.Forbidden(apperror.CodeForbidden, "you do not have permission to perform this action"))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func bearerToken(r *http.Request) (string, error) {
 	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
 	parts := strings.Fields(authorization)

@@ -22,6 +22,8 @@ var (
 	ErrPaymentExceedsReceivable = errors.New("payment exceeds partner receivable")
 	ErrPaymentAllocation        = errors.New("payment allocation failed")
 	ErrInconsistentData         = errors.New("inconsistent data")
+	ErrStoreNotOwned            = errors.New("store is not owned by this account")
+	ErrStoreExists              = errors.New("account already has a store")
 )
 
 const (
@@ -38,8 +40,10 @@ type User struct {
 	FullName     string
 	PasswordHash string
 	Role         string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// AccountType membedakan persona: "penitip" (default) atau "pemilik_toko".
+	AccountType string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Business struct {
@@ -67,6 +71,8 @@ type Account struct {
 	User     User
 	Member   Member
 	Business Business
+	// Store diisi hanya untuk akun pemilik_toko.
+	Store *Store
 }
 
 type Product struct {
@@ -89,10 +95,43 @@ type Partner struct {
 	OwnerName  string
 	WhatsApp   string
 	Address    *string
+	// StoreID diisi bila partner ditambahkan dari katalog toko pada peta.
+	StoreID    *uuid.UUID
 	IsActive   bool
 	Receivable int64
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// Store adalah toko global pada katalog peta (milik akun pemilik_toko).
+type Store struct {
+	ID           uuid.UUID
+	OwnerUserID  uuid.UUID
+	Name         string
+	Category     string
+	Description  *string
+	Address      string
+	WhatsApp     string
+	Latitude     float64
+	Longitude    float64
+	PhotoURL     *string
+	IsActive     bool
+	HasConsigned bool // sudah dititipkan oleh bisnis penitip yang sedang login (opsional, tergantung konteks)
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// StoreFilter menyaring katalog toko untuk peta.
+type StoreFilter struct {
+	// MinLat/MaxLat/MinLng/MaxLng adalah viewport peta (opsional).
+	MinLat, MaxLat, MinLng, MaxLng *float64
+	Category                        string
+	Search                          string
+	ActiveOnly                      bool
+	// ViewerBusinessID diisi agar field HasConsigned ikut dihitung.
+	ViewerBusinessID *uuid.UUID
+	Limit            int
+	Offset           int
 }
 
 type VisitItem struct {
@@ -255,6 +294,37 @@ func IsValidPaymentMethod(value string) bool {
 	default:
 		return false
 	}
+}
+
+// StoreCategories adalah daftar kategori toko yang menentukan ikon pada peta.
+var StoreCategories = []string{
+	"warung", "kelontong", "kafe", "resto", "minimarket", "apotek", "roti", "lainnya",
+}
+
+func IsValidStoreCategory(value string) bool {
+	for _, category := range StoreCategories {
+		if value == category {
+			return true
+		}
+	}
+	return false
+}
+
+func IsValidDescription(value string) bool {
+	return utf8.RuneCountInString(strings.TrimSpace(value)) <= 1000
+}
+
+func IsValidAddress(value string) bool {
+	length := utf8.RuneCountInString(strings.TrimSpace(value))
+	return length >= 3 && length <= 300
+}
+
+func IsValidLatitude(value float64) bool {
+	return value >= -90 && value <= 90
+}
+
+func IsValidLongitude(value float64) bool {
+	return value >= -180 && value <= 180
 }
 
 func GeneratePublicToken() (string, error) {
