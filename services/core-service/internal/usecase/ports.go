@@ -26,6 +26,15 @@ type Store interface {
 	UpdateStore(ctx context.Context, store domain.Store) (*domain.Store, error)
 	SetStoreActive(ctx context.Context, ownerUserID, storeID uuid.UUID, active bool) (*domain.Store, error)
 
+	SetStorePhoto(ctx context.Context, ownerUserID uuid.UUID, photoURL *string) (*domain.Store, *string, error)
+	SetProductPhoto(ctx context.Context, businessID, productID uuid.UUID, photoPath *string) (*domain.Product, *string, error)
+
+	CreateProposal(ctx context.Context, proposal domain.Proposal) (*domain.Proposal, error)
+	ProposalByID(ctx context.Context, proposalID uuid.UUID) (*domain.Proposal, error)
+	ListProposals(ctx context.Context, filter domain.ProposalFilter) ([]domain.Proposal, error)
+	ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string) (*domain.Proposal, error)
+	ListProducers(ctx context.Context, filter domain.ProducerFilter) ([]domain.Producer, error)
+
 	ListPartners(ctx context.Context, businessID uuid.UUID, activeOnly bool) ([]domain.Partner, error)
 	UpsertPartner(ctx context.Context, partner domain.Partner) (*domain.Partner, error)
 	SetPartnerActive(ctx context.Context, businessID, partnerID uuid.UUID, active bool) (*domain.Partner, error)

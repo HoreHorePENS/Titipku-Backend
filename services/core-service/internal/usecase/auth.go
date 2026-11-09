@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/titipku/titipku-backend/internal/platform/apperror"
 	"github.com/titipku/titipku-backend/internal/platform/identity"
+	"github.com/titipku/titipku-backend/internal/platform/imageupload"
 	"github.com/titipku/titipku-backend/services/core-service/internal/domain"
 )
 
@@ -227,7 +228,8 @@ func validateRegisterStore(input RegisterInput, fallbackWhatsApp *string) (map[s
 	if description != "" {
 		store.Description = &description
 	}
-	if photoURL != "" {
+	// Foto toko hanya boleh berasal dari endpoint unggah (PUT /v1/stores/mine/photo).
+	if imageupload.IsUploadedPath(photoURL) {
 		store.PhotoURL = &photoURL
 	}
 

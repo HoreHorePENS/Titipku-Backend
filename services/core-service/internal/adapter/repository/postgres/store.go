@@ -22,6 +22,11 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+}
+
 func mapFunctionError(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {

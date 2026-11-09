@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/titipku/titipku-backend/internal/platform/apperror"
 	"github.com/titipku/titipku-backend/internal/platform/identity"
+	"github.com/titipku/titipku-backend/internal/platform/imageupload"
 	"github.com/titipku/titipku-backend/services/core-service/internal/domain"
 )
 
@@ -46,16 +47,16 @@ func (a *App) ListStores(ctx context.Context, viewerBusinessID *uuid.UUID, input
 	}
 
 	stores, err := a.store.ListStores(ctx, domain.StoreFilter{
-		MinLat:            input.MinLat,
-		MaxLat:            input.MaxLat,
-		MinLng:            input.MinLng,
-		MaxLng:            input.MaxLng,
-		Category:          input.Category,
-		Search:            input.Search,
-		ActiveOnly:        true,
-		ViewerBusinessID:  viewerBusinessID,
-		Limit:             input.Limit,
-		Offset:            input.Offset,
+		MinLat:           input.MinLat,
+		MaxLat:           input.MaxLat,
+		MinLng:           input.MinLng,
+		MaxLng:           input.MaxLng,
+		Category:         input.Category,
+		Search:           input.Search,
+		ActiveOnly:       true,
+		ViewerBusinessID: viewerBusinessID,
+		Limit:            input.Limit,
+		Offset:           input.Offset,
 	})
 	if err != nil {
 		return nil, mapStoreError(err, "STORE_LIST_FAILED", "unable to load stores")
@@ -104,11 +105,7 @@ func (a *App) UpdateMyStore(ctx context.Context, userID uuid.UUID, input StoreIn
 	store.WhatsApp = normalizedWhatsApp
 	store.Latitude = input.Latitude
 	store.Longitude = input.Longitude
-	if photoURL := strings.TrimSpace(input.PhotoURL); photoURL != "" {
-		store.PhotoURL = &photoURL
-	} else {
-		store.PhotoURL = nil
-	}
+	// Foto toko tidak diubah lewat JSON; gunakan PUT/DELETE /v1/stores/mine/photo.
 	if input.IsActive != nil {
 		store.IsActive = *input.IsActive
 	}
@@ -157,7 +154,7 @@ func (a *App) CreateStore(ctx context.Context, userID uuid.UUID, input StoreInpu
 	if description := strings.TrimSpace(input.Description); description != "" {
 		store.Description = &description
 	}
-	if photoURL := strings.TrimSpace(input.PhotoURL); photoURL != "" {
+	if photoURL := strings.TrimSpace(input.PhotoURL); imageupload.IsUploadedPath(photoURL) {
 		store.PhotoURL = &photoURL
 	}
 

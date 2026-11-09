@@ -27,7 +27,9 @@ FROM alpine:3.24.4
 
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 app \
-    && adduser -S -D -H -u 10001 -G app app
+    && adduser -S -D -H -u 10001 -G app app \
+    && mkdir -p /data/uploads \
+    && chown app:app /data/uploads
 
 WORKDIR /app
 
@@ -38,6 +40,10 @@ COPY --from=builder /out/server /app/server
 USER 10001:10001
 
 ENV HTTP_PORT=8080
+# Foto toko/produk disimpan di sini. WAJIB di-mount sebagai volume agar tidak
+# hilang saat container dibuat ulang, mis. -v titipku-uploads:/data/uploads
+ENV UPLOAD_DIR=/data/uploads
+VOLUME ["/data/uploads"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
