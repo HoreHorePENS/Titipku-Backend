@@ -313,6 +313,33 @@ func (a *App) CancelProposal(ctx context.Context, actor Actor, proposalID uuid.U
 	return resolved, nil
 }
 
+// TerminatePartnership memutus kemitraan konsinyasi aktif (status: accepted -> cancelled).
+// Dapat dipanggil oleh penitip pemilik proposal kemitraan.
+func (a *App) TerminatePartnership(ctx context.Context, actor Actor, proposalID uuid.UUID) (*domain.Proposal, error) {
+	proposal, err := a.store.ProposalByID(ctx, proposalID)
+	if err != nil {
+		return nil, mapStoreError(err, "PROPOSAL_LOOKUP_FAILED", "unable to load proposal")
+	}
+
+	if actor.IsStoreOwner() {
+		return nil, apperror.Forbidden("ONLY_PENITIP_CAN_TERMINATE", "only penitip can terminate this partnership")
+	}
+
+	if proposal.BusinessID != actor.BusinessID {
+		return nil, apperror.NotFound("NOT_FOUND", "requested resource was not found")
+	}
+
+	if proposal.Status != domain.ProposalAccepted {
+		return nil, apperror.Conflict("PROPOSAL_NOT_ACCEPTED", "only active accepted proposals can be terminated")
+	}
+
+	resolved, err := a.store.ResolveProposal(ctx, proposalID, domain.ProposalCancelled, nil)
+	if err != nil {
+		return nil, mapStoreError(err, "PROPOSAL_UPDATE_FAILED", "unable to terminate proposal")
+	}
+	return resolved, nil
+}
+
 // ListProducers mengembalikan katalog produsen penitip untuk pemilik toko.
 func (a *App) ListProducers(ctx context.Context, actor Actor, input ProducerListInput) ([]domain.Producer, error) {
 	storeID, err := a.myStoreID(ctx, actor.UserID)

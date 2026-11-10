@@ -100,6 +100,7 @@ type Partner struct {
 	Address    *string
 	// StoreID diisi bila partner ditambahkan dari katalog toko pada peta.
 	StoreID    *uuid.UUID
+	ProposalID *uuid.UUID // ID proposal kemitraan aktif bila terhubung lewat proposal
 	IsActive   bool
 	Receivable int64
 	CreatedAt  time.Time

@@ -72,6 +72,7 @@ type partnerResponse struct {
 	WhatsApp   string    `json:"whatsapp"`
 	Address    *string   `json:"address,omitempty"`
 	StoreID    *string   `json:"store_id,omitempty"`
+	ProposalID *string   `json:"proposal_id,omitempty"`
 	IsActive   bool      `json:"is_active"`
 	Receivable int64     `json:"receivable"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -310,6 +311,10 @@ func newPartnerResponse(partner domain.Partner) partnerResponse {
 	if partner.StoreID != nil {
 		storeID := partner.StoreID.String()
 		response.StoreID = &storeID
+	}
+	if partner.ProposalID != nil {
+		proposalID := partner.ProposalID.String()
+		response.ProposalID = &proposalID
 	}
 	return response
 }

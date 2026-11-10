@@ -215,8 +215,9 @@ func (s *Store) attachProposalItems(ctx context.Context, proposals []domain.Prop
 	return rows.Err()
 }
 
-// ResolveProposal mengubah status proposal pending. Bila disetujui, toko
-// sekaligus dijadikan partner aktif bisnis penitip dalam transaksi yang sama.
+// ResolveProposal mengubah status proposal pending atau memutus proposal accepted.
+// Bila disetujui, toko sekaligus dijadikan partner aktif bisnis penitip dalam transaksi yang sama.
+// Bila dibatalkan/diputus dari status accepted, partner terkait dinonaktifkan (is_active = FALSE).
 // Jika items tidak kosong, item proposal disesuaikan dengan item yang disetujui.
 func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string, items []domain.ProposalItem) (*domain.Proposal, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -226,17 +227,31 @@ func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, statu
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var storeID, businessID uuid.UUID
+	var prevStatus string
 	err = tx.QueryRow(ctx, `
-		UPDATE consignment_proposals
-		SET status = $2, responded_at = now()
-		WHERE id = $1 AND status = 'pending'
-		RETURNING store_id, business_id
-	`, proposalID, status).Scan(&storeID, &businessID)
+		SELECT status, store_id, business_id
+		FROM consignment_proposals
+		WHERE id = $1
+	`, proposalID).Scan(&prevStatus, &storeID, &businessID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrProposalNotPending
+			return nil, domain.ErrNotFound
 		}
-		return nil, fmt.Errorf("resolve proposal: %w", err)
+		return nil, fmt.Errorf("lookup proposal: %w", err)
+	}
+
+	if prevStatus != domain.ProposalPending && !(prevStatus == domain.ProposalAccepted && status == domain.ProposalCancelled) {
+		return nil, domain.ErrProposalNotPending
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE consignment_proposals
+		SET status = $2, responded_at = CASE WHEN $2 = 'accepted' OR responded_at IS NULL THEN now() ELSE responded_at END,
+		    updated_at = now()
+		WHERE id = $1
+	`, proposalID, status)
+	if err != nil {
+		return nil, fmt.Errorf("update proposal status: %w", err)
 	}
 
 	if status == domain.ProposalAccepted {
@@ -262,6 +277,16 @@ func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, statu
 
 		if err := linkStorePartner(ctx, tx, businessID, storeID); err != nil {
 			return nil, err
+		}
+	} else if prevStatus == domain.ProposalAccepted && status == domain.ProposalCancelled {
+		// Putus kemitraan: nonaktifkan partner
+		_, err = tx.Exec(ctx, `
+			UPDATE partners
+			SET is_active = FALSE, updated_at = now()
+			WHERE business_id = $1 AND store_id = $2
+		`, businessID, storeID)
+		if err != nil {
+			return nil, fmt.Errorf("deactivate partner on termination: %w", err)
 		}
 	}
 

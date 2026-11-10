@@ -60,6 +60,7 @@ func NewRouter(
 			router.Post("/proposals/{proposalID}/accept", httpx.Handle(logger, handler.AcceptProposal))
 			router.Post("/proposals/{proposalID}/reject", httpx.Handle(logger, handler.RejectProposal))
 			router.Post("/proposals/{proposalID}/cancel", httpx.Handle(logger, handler.CancelProposal))
+			router.Post("/proposals/{proposalID}/terminate", httpx.Handle(logger, handler.TerminatePartnership))
 
 			// Riwayat kunjungan & nota konsinyasi: terbaca oleh kedua belah pihak.
 			router.Get("/visits", httpx.Handle(logger, handler.ListVisits))

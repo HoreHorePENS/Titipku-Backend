@@ -312,6 +312,25 @@ func (h *Handler) CancelProposal(w http.ResponseWriter, r *http.Request) error {
 	return h.resolveProposal(w, r, "cancel")
 }
 
+// TerminatePartnership: POST /v1/proposals/{proposalID}/terminate (penitip memutus kemitraan konsinyasi aktif)
+func (h *Handler) TerminatePartnership(w http.ResponseWriter, r *http.Request) error {
+	actor, err := h.actor(r)
+	if err != nil {
+		return err
+	}
+	proposalID, err := pathUUID(r, "proposalID")
+	if err != nil {
+		return err
+	}
+
+	proposal, err := h.app.TerminatePartnership(r.Context(), actor, proposalID)
+	if err != nil {
+		return err
+	}
+	httpx.WriteData(w, r, http.StatusOK, newProposalResponse(*proposal))
+	return nil
+}
+
 // ListProducers: GET /v1/producers?q=&limit=&offset= (pemilik toko)
 func (h *Handler) ListProducers(w http.ResponseWriter, r *http.Request) error {
 	actor, err := h.actor(r)

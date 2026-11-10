@@ -20,7 +20,16 @@ const partnerQuery = `
 			WHERE i.business_id = p.business_id
 			  AND i.partner_id = p.id
 			  AND i.paid < i.total
-		), 0) AS receivable
+		), 0) AS receivable,
+		(
+			SELECT cp.id
+			FROM consignment_proposals cp
+			WHERE cp.business_id = p.business_id
+			  AND cp.store_id = p.store_id
+			  AND cp.status = 'accepted'
+			ORDER BY cp.created_at DESC
+			LIMIT 1
+		) AS proposal_id
 	FROM partners p
 `
 
@@ -169,6 +178,7 @@ func scanPartner(row pgx.Row) (*domain.Partner, error) {
 		&partner.CreatedAt,
 		&partner.UpdatedAt,
 		&partner.Receivable,
+		&partner.ProposalID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
