@@ -41,10 +41,12 @@ type Store interface {
 	SetPartnerActive(ctx context.Context, businessID, partnerID uuid.UUID, active bool) (*domain.Partner, error)
 	PartnerByStoreID(ctx context.Context, businessID, storeID uuid.UUID) (*domain.Partner, error)
 	OwnerMemberByBusinessID(ctx context.Context, businessID uuid.UUID) (uuid.UUID, error)
+	PartnerStock(ctx context.Context, businessID, partnerID uuid.UUID) ([]domain.PartnerStockItem, error)
 
 	CreateVisit(ctx context.Context, businessID, memberID uuid.UUID, payload []byte, requestHash string) (*domain.VisitResult, error)
 	ListVisits(ctx context.Context, businessID uuid.UUID, partnerID *uuid.UUID, limit, offset int) ([]domain.Visit, int64, error)
 	ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, offset int) ([]domain.Visit, int64, error)
+	StoreVisitByID(ctx context.Context, storeID, visitID uuid.UUID) (*domain.Visit, error)
 	VisitByID(ctx context.Context, businessID, visitID uuid.UUID) (*domain.Visit, error)
 
 	ListInvoices(ctx context.Context, businessID uuid.UUID, status string, partnerID *uuid.UUID, limit, offset int) ([]domain.Invoice, int64, error)

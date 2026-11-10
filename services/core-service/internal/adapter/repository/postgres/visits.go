@@ -153,18 +153,44 @@ func (s *Store) ListVisits(ctx context.Context, businessID uuid.UUID, partnerID 
 	return visits, total, nil
 }
 
+// storeVisitSelect: nota dilihat dari sisi toko; "partner" adalah usaha penitip.
+const storeVisitSelect = `
+	SELECT
+		v.id, v.business_id, b.name,
+		v.partner_id, b.name, b.owner_name, COALESCE(b.whatsapp, ''),
+		v.member_id, v.number, v.public_token, v.visited_at, v.received_by,
+		COALESCE(i.total, 0), v.created_at,
+		COUNT(*) OVER() AS total,
+		COALESCE(i.paid, 0)
+	FROM visits v
+	JOIN businesses b ON b.id = v.business_id
+	JOIN partners p ON p.id = v.partner_id
+	LEFT JOIN invoices i ON i.visit_id = v.id
+`
+
+func scanStoreVisit(row pgx.Row) (*domain.Visit, int64, error) {
+	var (
+		visit domain.Visit
+		total int64
+	)
+	err := row.Scan(
+		&visit.ID, &visit.BusinessID, &visit.BusinessName,
+		&visit.PartnerID, &visit.PartnerName, &visit.PartnerOwner, &visit.PartnerWhatsApp,
+		&visit.MemberID, &visit.Number, &visit.PublicToken, &visit.VisitedAt, &visit.ReceivedBy,
+		&visit.Total, &visit.CreatedAt, &total, &visit.Paid,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, 0, domain.ErrNotFound
+		}
+		return nil, 0, fmt.Errorf("scan store visit: %w", err)
+	}
+	return &visit, total, nil
+}
+
+// ListStoreVisits: nota dari semua penitip untuk toko ini (terbaru dulu).
 func (s *Store) ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, offset int) ([]domain.Visit, int64, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT
-			v.id, v.business_id, b.name,
-			v.partner_id, b.name, b.owner_name, COALESCE(b.whatsapp, ''),
-			v.member_id, v.number, v.public_token, v.visited_at, v.received_by,
-			COALESCE(i.total, 0), v.created_at,
-			COUNT(*) OVER() AS total
-		FROM visits v
-		JOIN businesses b ON b.id = v.business_id
-		JOIN partners p ON p.id = v.partner_id
-		LEFT JOIN invoices i ON i.visit_id = v.id
+	rows, err := s.pool.Query(ctx, storeVisitSelect+`
 		WHERE p.store_id = $1
 		ORDER BY v.visited_at DESC, v.id DESC
 		LIMIT $2 OFFSET $3
@@ -177,7 +203,7 @@ func (s *Store) ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, o
 	visits := make([]domain.Visit, 0)
 	var total int64
 	for rows.Next() {
-		visit, count, err := scanVisit(rows)
+		visit, count, err := scanStoreVisit(rows)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -189,6 +215,23 @@ func (s *Store) ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, o
 	}
 	return visits, total, nil
 }
+
+// StoreVisitByID: satu nota beserta rinciannya, hanya bila nota itu untuk toko ini.
+func (s *Store) StoreVisitByID(ctx context.Context, storeID, visitID uuid.UUID) (*domain.Visit, error) {
+	visit, _, err := scanStoreVisit(s.pool.QueryRow(ctx, storeVisitSelect+`
+		WHERE p.store_id = $1 AND v.id = $2
+	`, storeID, visitID))
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.visitItems(ctx, visitID)
+	if err != nil {
+		return nil, err
+	}
+	visit.Items = items
+	return visit, nil
+}
+
 
 func (s *Store) VisitByID(ctx context.Context, businessID, visitID uuid.UUID) (*domain.Visit, error) {
 	visit, _, err := scanVisit(s.pool.QueryRow(ctx, visitSelect+`

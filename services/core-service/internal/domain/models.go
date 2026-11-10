@@ -167,6 +167,8 @@ type Visit struct {
 	VisitedAt       time.Time
 	ReceivedBy      string
 	Total           int64
+	// Paid hanya diisi pada nota yang dilihat pemilik toko (pembayaran atas tagihan nota ini).
+	Paid            int64
 	Items           []VisitItem
 	CreatedAt       time.Time
 }

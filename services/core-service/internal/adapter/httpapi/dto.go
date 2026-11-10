@@ -517,3 +517,41 @@ func formatRupiah(amount int64) string {
 	}
 	return builder.String()
 }
+
+// storeVisitResponse: nota dilihat pemilik toko (partner_* = usaha penitip) + status bayar.
+type storeVisitResponse struct {
+	visitResponse
+	BusinessID    string `json:"business_id"`
+	Paid          int64  `json:"paid"`
+	PaymentStatus string `json:"payment_status"`
+}
+
+func paymentStatus(total, paid int64) string {
+	switch {
+	case total <= 0:
+		return "no_invoice"
+	case paid >= total:
+		return "paid"
+	case paid > 0:
+		return "partial"
+	default:
+		return "unpaid"
+	}
+}
+
+func (h *Handler) newStoreVisitResponse(visit domain.Visit) storeVisitResponse {
+	return storeVisitResponse{
+		visitResponse: h.newVisitResponse(visit),
+		BusinessID:    visit.BusinessID.String(),
+		Paid:          visit.Paid,
+		PaymentStatus: paymentStatus(visit.Total, visit.Paid),
+	}
+}
+
+func (h *Handler) newStoreVisitResponses(visits []domain.Visit) []storeVisitResponse {
+	responses := make([]storeVisitResponse, 0, len(visits))
+	for _, visit := range visits {
+		responses = append(responses, h.newStoreVisitResponse(visit))
+	}
+	return responses
+}

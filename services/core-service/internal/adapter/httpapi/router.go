@@ -81,8 +81,8 @@ func NewRouter(
 				router.Get("/producers", httpx.Handle(logger, handler.ListProducers))
 
 				// Nota penjualan & kunjungan buatan pemilik toko.
-				router.Post("/store-visits", httpx.Handle(logger, handler.CreateStoreVisit))
 				router.Get("/store-visits", httpx.Handle(logger, handler.ListStoreVisits))
+				router.Get("/store-visits/{visitID}", httpx.Handle(logger, handler.GetStoreVisit))
 			})
 
 			// Area penitip (produsen): seluruh alur bisnis yang sudah ada.
@@ -103,6 +103,7 @@ func NewRouter(
 				router.Post("/partners", httpx.Handle(logger, handler.CreatePartner))
 				router.Put("/partners/{partnerID}", httpx.Handle(logger, handler.UpdatePartner))
 				router.Patch("/partners/{partnerID}/status", httpx.Handle(logger, handler.SetPartnerActive))
+				router.Get("/partners/{partnerID}/stock", httpx.Handle(logger, handler.PartnerStock))
 
 				router.Post("/visits", httpx.Handle(logger, handler.CreateVisit))
 
