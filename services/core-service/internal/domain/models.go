@@ -119,7 +119,8 @@ type Store struct {
 	Longitude    float64
 	PhotoURL     *string
 	IsActive     bool
-	HasConsigned bool // sudah dititipkan oleh bisnis penitip yang sedang login (opsional, tergantung konteks)
+	HasConsigned        bool // sudah dititipkan oleh bisnis penitip yang sedang login (opsional, tergantung konteks)
+	HasPendingProposal  bool // ada proposal pending antara toko ini dan bisnis penitip yang sedang login
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

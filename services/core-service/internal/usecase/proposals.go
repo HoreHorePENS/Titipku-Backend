@@ -21,7 +21,7 @@ type Actor struct {
 	BusinessID uuid.UUID
 }
 
-func (a Actor) isStoreOwner() bool { return a.AccountType == identity.AccountTypePemilikToko }
+func (a Actor) IsStoreOwner() bool { return a.AccountType == identity.AccountTypePemilikToko }
 
 type ProposalItemInput struct {
 	ProductID uuid.UUID
@@ -88,7 +88,7 @@ func (a *App) CreateProposal(ctx context.Context, actor Actor, input CreatePropo
 	proposal.EstimatedCapacity = optionalText(input.EstimatedCapacity, domain.MaxEstimatedCapacity, "estimated_capacity", fields)
 
 	var err error
-	if actor.isStoreOwner() {
+	if actor.IsStoreOwner() {
 		err = a.addressStoreOffer(ctx, actor, input, &proposal, fields)
 	} else {
 		err = a.addressPenitipRequest(ctx, actor, input, &proposal, fields)
@@ -188,7 +188,7 @@ func (a *App) ListProposals(ctx context.Context, actor Actor, input ProposalList
 	}
 
 	filter := domain.ProposalFilter{Direction: input.Direction, Status: input.Status}
-	if actor.isStoreOwner() {
+	if actor.IsStoreOwner() {
 		storeID, err := a.myStoreID(ctx, actor.UserID)
 		if err != nil {
 			return nil, err
@@ -214,7 +214,7 @@ func (a *App) proposalForActor(ctx context.Context, actor Actor, proposalID uuid
 		return nil, false, mapStoreError(err, "PROPOSAL_LOOKUP_FAILED", "unable to load proposal")
 	}
 
-	if actor.isStoreOwner() {
+	if actor.IsStoreOwner() {
 		storeID, err := a.myStoreID(ctx, actor.UserID)
 		if err != nil {
 			return nil, false, err
@@ -232,7 +232,8 @@ func (a *App) proposalForActor(ctx context.Context, actor Actor, proposalID uuid
 }
 
 // RespondProposal menyetujui atau menolak proposal. Hanya penerima yang boleh.
-func (a *App) RespondProposal(ctx context.Context, actor Actor, proposalID uuid.UUID, accept bool) (*domain.Proposal, error) {
+// Jika accept = true dan approvedItems diisi, hanya produk-produk yang disetujui yang disimpan.
+func (a *App) RespondProposal(ctx context.Context, actor Actor, proposalID uuid.UUID, accept bool, approvedItems []ProposalItemInput) (*domain.Proposal, error) {
 	proposal, isInitiator, err := a.proposalForActor(ctx, actor, proposalID)
 	if err != nil {
 		return nil, err
@@ -245,12 +246,49 @@ func (a *App) RespondProposal(ctx context.Context, actor Actor, proposalID uuid.
 	}
 
 	status := domain.ProposalRejected
+	var items []domain.ProposalItem
 	if accept {
 		status = domain.ProposalAccepted
+		if len(approvedItems) > 0 {
+			fields := make(map[string]string)
+			items = proposalItems(approvedItems, fields)
+			if len(fields) > 0 {
+				return nil, apperror.Validation(fields)
+			}
+		}
 	}
-	resolved, err := a.store.ResolveProposal(ctx, proposalID, status)
+	resolved, err := a.store.ResolveProposal(ctx, proposalID, status, items)
 	if err != nil {
 		return nil, mapStoreError(err, "PROPOSAL_UPDATE_FAILED", "unable to update proposal")
+	}
+	return resolved, nil
+}
+
+// SetProposalItems mengisi rincian produk yang ingin dititipkan oleh penitip.
+func (a *App) SetProposalItems(ctx context.Context, actor Actor, proposalID uuid.UUID, inputs []ProposalItemInput) (*domain.Proposal, error) {
+	proposal, _, err := a.proposalForActor(ctx, actor, proposalID)
+	if err != nil {
+		return nil, err
+	}
+	if proposal.Status != domain.ProposalPending {
+		return nil, apperror.Conflict("PROPOSAL_NOT_PENDING", "proposal is no longer pending")
+	}
+	if actor.IsStoreOwner() {
+		return nil, apperror.Forbidden("ONLY_PENITIP_CAN_SET_ITEMS", "only penitip can set products to consign")
+	}
+
+	fields := make(map[string]string)
+	if len(inputs) == 0 {
+		fields["items"] = "must contain at least one item"
+	}
+	items := proposalItems(inputs, fields)
+	if len(fields) > 0 {
+		return nil, apperror.Validation(fields)
+	}
+
+	resolved, err := a.store.SetProposalItems(ctx, proposalID, items, domain.ProposalPenitipToStore)
+	if err != nil {
+		return nil, mapStoreError(err, "PROPOSAL_UPDATE_FAILED", "unable to update proposal items")
 	}
 	return resolved, nil
 }
@@ -268,7 +306,7 @@ func (a *App) CancelProposal(ctx context.Context, actor Actor, proposalID uuid.U
 		return nil, apperror.Conflict("PROPOSAL_NOT_PENDING", "proposal is no longer pending")
 	}
 
-	resolved, err := a.store.ResolveProposal(ctx, proposalID, domain.ProposalCancelled)
+	resolved, err := a.store.ResolveProposal(ctx, proposalID, domain.ProposalCancelled, nil)
 	if err != nil {
 		return nil, mapStoreError(err, "PROPOSAL_UPDATE_FAILED", "unable to update proposal")
 	}

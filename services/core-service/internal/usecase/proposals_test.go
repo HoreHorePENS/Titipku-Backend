@@ -66,14 +66,42 @@ func (f *fakeStore) ProposalByID(_ context.Context, id uuid.UUID) (*domain.Propo
 	return &copy, nil
 }
 
-func (f *fakeStore) ResolveProposal(_ context.Context, id uuid.UUID, status string) (*domain.Proposal, error) {
+func (f *fakeStore) ResolveProposal(_ context.Context, id uuid.UUID, status string, items []domain.ProposalItem) (*domain.Proposal, error) {
 	p, ok := f.proposals[id]
 	if !ok || p.Status != domain.ProposalPending {
 		return nil, domain.ErrProposalNotPending
 	}
 	p.Status = status
+	if len(items) > 0 {
+		p.Items = items
+	}
 	copy := *p
 	return &copy, nil
+}
+
+func (f *fakeStore) SetProposalItems(_ context.Context, id uuid.UUID, items []domain.ProposalItem, direction string) (*domain.Proposal, error) {
+	p, ok := f.proposals[id]
+	if !ok || p.Status != domain.ProposalPending {
+		return nil, domain.ErrProposalNotPending
+	}
+	p.Items = items
+	if direction != "" {
+		p.Direction = direction
+	}
+	copy := *p
+	return &copy, nil
+}
+
+func (f *fakeStore) PartnerByStoreID(_ context.Context, _, _ uuid.UUID) (*domain.Partner, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (f *fakeStore) OwnerMemberByBusinessID(_ context.Context, _ uuid.UUID) (uuid.UUID, error) {
+	return uuid.Nil, domain.ErrNotFound
+}
+
+func (f *fakeStore) ListStoreVisits(_ context.Context, _ uuid.UUID, _, _ int) ([]domain.Visit, int64, error) {
+	return nil, 0, nil
 }
 
 func (f *fakeStore) SetStorePhoto(_ context.Context, userID uuid.UUID, url *string) (*domain.Store, *string, error) {
@@ -153,11 +181,11 @@ func TestStoreOwnerOfferFlow(t *testing.T) {
 	}
 
 	// Pengirim tidak boleh menyetujui tawarannya sendiri.
-	if _, err := f.app.RespondProposal(ctx, f.owner, offer.ID, true); appErrCode(t, err) != "ONLY_RECIPIENT_CAN_RESPOND" {
+	if _, err := f.app.RespondProposal(ctx, f.owner, offer.ID, true, nil); appErrCode(t, err) != "ONLY_RECIPIENT_CAN_RESPOND" {
 		t.Fatalf("sender accepting own offer: %v", err)
 	}
 	// Penitip lain tidak boleh melihat/menanggapi.
-	if _, err := f.app.RespondProposal(ctx, f.stranger, offer.ID, true); appErrCode(t, err) != "NOT_FOUND" {
+	if _, err := f.app.RespondProposal(ctx, f.stranger, offer.ID, true, nil); appErrCode(t, err) != "NOT_FOUND" {
 		t.Fatalf("stranger: %v", err)
 	}
 	// Penerima tidak boleh membatalkan.
@@ -165,11 +193,11 @@ func TestStoreOwnerOfferFlow(t *testing.T) {
 		t.Fatalf("recipient cancelling: %v", err)
 	}
 
-	accepted, err := f.app.RespondProposal(ctx, f.penitip, offer.ID, true)
+	accepted, err := f.app.RespondProposal(ctx, f.penitip, offer.ID, true, nil)
 	if err != nil || accepted.Status != domain.ProposalAccepted {
 		t.Fatalf("accept: %v %+v", err, accepted)
 	}
-	if _, err := f.app.RespondProposal(ctx, f.penitip, offer.ID, false); appErrCode(t, err) != "PROPOSAL_NOT_PENDING" {
+	if _, err := f.app.RespondProposal(ctx, f.penitip, offer.ID, false, nil); appErrCode(t, err) != "PROPOSAL_NOT_PENDING" {
 		t.Fatalf("responding twice: %v", err)
 	}
 }
@@ -201,7 +229,7 @@ func TestPenitipRequestValidation(t *testing.T) {
 		t.Fatalf("unexpected request: %+v", request)
 	}
 	// Pemilik toko menolak pengajuan.
-	rejected, err := f.app.RespondProposal(ctx, f.owner, request.ID, false)
+	rejected, err := f.app.RespondProposal(ctx, f.owner, request.ID, false, nil)
 	if err != nil || rejected.Status != domain.ProposalRejected {
 		t.Fatalf("reject: %v", err)
 	}

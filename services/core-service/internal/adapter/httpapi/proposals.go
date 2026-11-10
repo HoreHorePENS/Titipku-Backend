@@ -228,15 +228,74 @@ func (h *Handler) resolveProposal(w http.ResponseWriter, r *http.Request, action
 	var proposal *domain.Proposal
 	switch action {
 	case "accept":
-		proposal, err = h.app.RespondProposal(r.Context(), actor, proposalID, true)
+		var request struct {
+			Items []proposalItemRequest `json:"items"`
+		}
+		var approvedItems []usecase.ProposalItemInput
+		if r.Body != nil && r.ContentLength > 0 {
+			if err := httpx.DecodeJSON(w, r, &request); err == nil && len(request.Items) > 0 {
+				fields := map[string]string{}
+				for _, it := range request.Items {
+					pID := optionalUUID(it.ProductID, "items", fields)
+					approvedItems = append(approvedItems, usecase.ProposalItemInput{
+						ProductID: pID,
+						Qty:       it.Qty,
+					})
+				}
+				if len(fields) > 0 {
+					return apperror.Validation(fields)
+				}
+			}
+		}
+		proposal, err = h.app.RespondProposal(r.Context(), actor, proposalID, true, approvedItems)
 	case "reject":
-		proposal, err = h.app.RespondProposal(r.Context(), actor, proposalID, false)
+		proposal, err = h.app.RespondProposal(r.Context(), actor, proposalID, false, nil)
 	default:
 		proposal, err = h.app.CancelProposal(r.Context(), actor, proposalID)
 	}
 	if err != nil {
 		return err
 	}
+	httpx.WriteData(w, r, http.StatusOK, newProposalResponse(*proposal))
+	return nil
+}
+
+// SetProposalItems: POST /v1/proposals/{proposalID}/items (penitip memberikan detail produk tawaran toko)
+func (h *Handler) SetProposalItems(w http.ResponseWriter, r *http.Request) error {
+	actor, err := h.actor(r)
+	if err != nil {
+		return err
+	}
+	proposalID, err := pathUUID(r, "proposalID")
+	if err != nil {
+		return err
+	}
+
+	var request struct {
+		Items []proposalItemRequest `json:"items"`
+	}
+	if err := httpx.DecodeJSON(w, r, &request); err != nil {
+		return err
+	}
+
+	fields := map[string]string{}
+	items := make([]usecase.ProposalItemInput, 0, len(request.Items))
+	for _, it := range request.Items {
+		pID := optionalUUID(it.ProductID, "items", fields)
+		items = append(items, usecase.ProposalItemInput{
+			ProductID: pID,
+			Qty:       it.Qty,
+		})
+	}
+	if len(fields) > 0 {
+		return apperror.Validation(fields)
+	}
+
+	proposal, err := h.app.SetProposalItems(r.Context(), actor, proposalID, items)
+	if err != nil {
+		return err
+	}
+
 	httpx.WriteData(w, r, http.StatusOK, newProposalResponse(*proposal))
 	return nil
 }

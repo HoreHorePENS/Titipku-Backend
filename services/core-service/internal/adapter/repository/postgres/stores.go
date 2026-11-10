@@ -20,7 +20,13 @@ const storeQuery = `
 			WHERE p.store_id = s.id
 			  AND p.business_id = $1
 			  AND p.is_active
-		) AS has_consigned
+		) AS has_consigned,
+		$1::uuid IS NOT NULL AND EXISTS (
+			SELECT 1 FROM consignment_proposals cp
+			WHERE cp.store_id = s.id
+			  AND cp.business_id = $1
+			  AND cp.status = 'pending'
+		) AS has_pending_proposal
 	FROM stores s
 `
 
@@ -200,6 +206,7 @@ func scanStore(row pgx.Row) (*domain.Store, error) {
 		&store.CreatedAt,
 		&store.UpdatedAt,
 		&store.HasConsigned,
+		&store.HasPendingProposal,
 	)
 	if err != nil {
 		return nil, err

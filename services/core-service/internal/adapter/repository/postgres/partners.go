@@ -108,6 +108,26 @@ func (s *Store) UpsertPartner(ctx context.Context, partner domain.Partner) (*dom
 	return s.partnerByID(ctx, partner.BusinessID, result.ID)
 }
 
+func (s *Store) PartnerByStoreID(ctx context.Context, businessID, storeID uuid.UUID) (*domain.Partner, error) {
+	return s.partnerByStoreID(ctx, businessID, storeID)
+}
+
+func (s *Store) OwnerMemberByBusinessID(ctx context.Context, businessID uuid.UUID) (uuid.UUID, error) {
+	var memberID uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT id FROM members
+		WHERE business_id = $1 AND role = 'owner' AND is_active
+		LIMIT 1
+	`, businessID).Scan(&memberID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, domain.ErrNotFound
+		}
+		return uuid.Nil, fmt.Errorf("owner member by business: %w", err)
+	}
+	return memberID, nil
+}
+
 func (s *Store) partnerByStoreID(ctx context.Context, businessID, storeID uuid.UUID) (*domain.Partner, error) {
 	return scanPartner(s.pool.QueryRow(ctx, partnerQuery+`
 		WHERE p.business_id = $1 AND p.store_id = $2

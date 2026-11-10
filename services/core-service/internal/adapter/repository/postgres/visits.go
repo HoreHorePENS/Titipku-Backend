@@ -153,6 +153,43 @@ func (s *Store) ListVisits(ctx context.Context, businessID uuid.UUID, partnerID 
 	return visits, total, nil
 }
 
+func (s *Store) ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, offset int) ([]domain.Visit, int64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			v.id, v.business_id, b.name,
+			v.partner_id, b.name, b.owner_name, COALESCE(b.whatsapp, ''),
+			v.member_id, v.number, v.public_token, v.visited_at, v.received_by,
+			COALESCE(i.total, 0), v.created_at,
+			COUNT(*) OVER() AS total
+		FROM visits v
+		JOIN businesses b ON b.id = v.business_id
+		JOIN partners p ON p.id = v.partner_id
+		LEFT JOIN invoices i ON i.visit_id = v.id
+		WHERE p.store_id = $1
+		ORDER BY v.visited_at DESC, v.id DESC
+		LIMIT $2 OFFSET $3
+	`, storeID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list store visits: %w", err)
+	}
+	defer rows.Close()
+
+	visits := make([]domain.Visit, 0)
+	var total int64
+	for rows.Next() {
+		visit, count, err := scanVisit(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = count
+		visits = append(visits, *visit)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate store visits: %w", err)
+	}
+	return visits, total, nil
+}
+
 func (s *Store) VisitByID(ctx context.Context, businessID, visitID uuid.UUID) (*domain.Visit, error) {
 	visit, _, err := scanVisit(s.pool.QueryRow(ctx, visitSelect+`
 		WHERE v.business_id = $1 AND v.id = $2

@@ -56,9 +56,14 @@ func NewRouter(
 			// Proposal kemitraan dua arah: tawaran toko & pengajuan penitip.
 			router.Get("/proposals", httpx.Handle(logger, handler.ListProposals))
 			router.Post("/proposals", httpx.Handle(logger, handler.CreateProposal))
+			router.Post("/proposals/{proposalID}/items", httpx.Handle(logger, handler.SetProposalItems))
 			router.Post("/proposals/{proposalID}/accept", httpx.Handle(logger, handler.AcceptProposal))
 			router.Post("/proposals/{proposalID}/reject", httpx.Handle(logger, handler.RejectProposal))
 			router.Post("/proposals/{proposalID}/cancel", httpx.Handle(logger, handler.CancelProposal))
+
+			// Riwayat kunjungan & nota konsinyasi: terbaca oleh kedua belah pihak.
+			router.Get("/visits", httpx.Handle(logger, handler.ListVisits))
+			router.Get("/visits/{visitID}", httpx.Handle(logger, handler.GetVisit))
 
 			// Area pemilik toko.
 			router.Group(func(router chi.Router) {
@@ -73,6 +78,10 @@ func NewRouter(
 
 				// Katalog produsen penitip (beserta produk aktif) untuk ditawari.
 				router.Get("/producers", httpx.Handle(logger, handler.ListProducers))
+
+				// Nota penjualan & kunjungan buatan pemilik toko.
+				router.Post("/store-visits", httpx.Handle(logger, handler.CreateStoreVisit))
+				router.Get("/store-visits", httpx.Handle(logger, handler.ListStoreVisits))
 			})
 
 			// Area penitip (produsen): seluruh alur bisnis yang sudah ada.
@@ -94,9 +103,7 @@ func NewRouter(
 				router.Put("/partners/{partnerID}", httpx.Handle(logger, handler.UpdatePartner))
 				router.Patch("/partners/{partnerID}/status", httpx.Handle(logger, handler.SetPartnerActive))
 
-				router.Get("/visits", httpx.Handle(logger, handler.ListVisits))
 				router.Post("/visits", httpx.Handle(logger, handler.CreateVisit))
-				router.Get("/visits/{visitID}", httpx.Handle(logger, handler.GetVisit))
 
 				router.Get("/invoices", httpx.Handle(logger, handler.ListInvoices))
 				router.Get("/invoices/{invoiceID}", httpx.Handle(logger, handler.GetInvoice))

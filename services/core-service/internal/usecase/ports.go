@@ -32,15 +32,19 @@ type Store interface {
 	CreateProposal(ctx context.Context, proposal domain.Proposal) (*domain.Proposal, error)
 	ProposalByID(ctx context.Context, proposalID uuid.UUID) (*domain.Proposal, error)
 	ListProposals(ctx context.Context, filter domain.ProposalFilter) ([]domain.Proposal, error)
-	ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string) (*domain.Proposal, error)
+	ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string, items []domain.ProposalItem) (*domain.Proposal, error)
+	SetProposalItems(ctx context.Context, proposalID uuid.UUID, items []domain.ProposalItem, direction string) (*domain.Proposal, error)
 	ListProducers(ctx context.Context, filter domain.ProducerFilter) ([]domain.Producer, error)
 
 	ListPartners(ctx context.Context, businessID uuid.UUID, activeOnly bool) ([]domain.Partner, error)
 	UpsertPartner(ctx context.Context, partner domain.Partner) (*domain.Partner, error)
 	SetPartnerActive(ctx context.Context, businessID, partnerID uuid.UUID, active bool) (*domain.Partner, error)
+	PartnerByStoreID(ctx context.Context, businessID, storeID uuid.UUID) (*domain.Partner, error)
+	OwnerMemberByBusinessID(ctx context.Context, businessID uuid.UUID) (uuid.UUID, error)
 
 	CreateVisit(ctx context.Context, businessID, memberID uuid.UUID, payload []byte, requestHash string) (*domain.VisitResult, error)
 	ListVisits(ctx context.Context, businessID uuid.UUID, partnerID *uuid.UUID, limit, offset int) ([]domain.Visit, int64, error)
+	ListStoreVisits(ctx context.Context, storeID uuid.UUID, limit, offset int) ([]domain.Visit, int64, error)
 	VisitByID(ctx context.Context, businessID, visitID uuid.UUID) (*domain.Visit, error)
 
 	ListInvoices(ctx context.Context, businessID uuid.UUID, status string, partnerID *uuid.UUID, limit, offset int) ([]domain.Invoice, int64, error)

@@ -47,8 +47,9 @@ type storeResponse struct {
 	Longitude    float64  `json:"longitude"`
 	PhotoURL     *string  `json:"photo_url,omitempty"`
 	IsActive     bool     `json:"is_active"`
-	HasConsigned bool     `json:"has_consigned"`
-	CreatedAt    time.Time `json:"created_at"`
+	HasConsigned        bool      `json:"has_consigned"`
+	HasPendingProposal  bool      `json:"has_pending_proposal"`
+	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
@@ -246,9 +247,10 @@ func newStoreResponse(store domain.Store) storeResponse {
 		Latitude:     store.Latitude,
 		Longitude:    store.Longitude,
 		PhotoURL:     store.PhotoURL,
-		IsActive:     store.IsActive,
-		HasConsigned: store.HasConsigned,
-		CreatedAt:    store.CreatedAt,
+		IsActive:            store.IsActive,
+		HasConsigned:        store.HasConsigned,
+		HasPendingProposal:  store.HasPendingProposal,
+		CreatedAt:           store.CreatedAt,
 		UpdatedAt:    store.UpdatedAt,
 	}
 }

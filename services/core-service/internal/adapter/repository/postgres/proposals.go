@@ -217,7 +217,8 @@ func (s *Store) attachProposalItems(ctx context.Context, proposals []domain.Prop
 
 // ResolveProposal mengubah status proposal pending. Bila disetujui, toko
 // sekaligus dijadikan partner aktif bisnis penitip dalam transaksi yang sama.
-func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string) (*domain.Proposal, error) {
+// Jika items tidak kosong, item proposal disesuaikan dengan item yang disetujui.
+func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, status string, items []domain.ProposalItem) (*domain.Proposal, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin resolve proposal: %w", err)
@@ -239,6 +240,26 @@ func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, statu
 	}
 
 	if status == domain.ProposalAccepted {
+		if len(items) > 0 {
+			if _, err := tx.Exec(ctx, `DELETE FROM consignment_proposal_items WHERE proposal_id = $1`, proposalID); err != nil {
+				return nil, fmt.Errorf("delete proposal items for partial approval: %w", err)
+			}
+			for _, item := range items {
+				tag, err := tx.Exec(ctx, `
+					INSERT INTO consignment_proposal_items (proposal_id, product_id, qty)
+					SELECT $1, p.id, $4
+					FROM products p
+					WHERE p.id = $2 AND p.business_id = $3 AND p.is_active
+				`, proposalID, item.ProductID, businessID, item.Qty)
+				if err != nil {
+					return nil, fmt.Errorf("insert approved proposal item: %w", err)
+				}
+				if tag.RowsAffected() == 0 {
+					return nil, domain.ErrNotFound
+				}
+			}
+		}
+
 		if err := linkStorePartner(ctx, tx, businessID, storeID); err != nil {
 			return nil, err
 		}
@@ -246,6 +267,64 @@ func (s *Store) ResolveProposal(ctx context.Context, proposalID uuid.UUID, statu
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit resolve proposal: %w", err)
+	}
+	return s.ProposalByID(ctx, proposalID)
+}
+
+// SetProposalItems mengisi atau memperbarui daftar produk yang diajukan dalam proposal.
+func (s *Store) SetProposalItems(ctx context.Context, proposalID uuid.UUID, items []domain.ProposalItem, direction string) (*domain.Proposal, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin set proposal items: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var businessID uuid.UUID
+	var status string
+	err = tx.QueryRow(ctx, `
+		SELECT business_id, status FROM consignment_proposals WHERE id = $1
+	`, proposalID).Scan(&businessID, &status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("lookup proposal for items: %w", err)
+	}
+	if status != domain.ProposalPending {
+		return nil, domain.ErrProposalNotPending
+	}
+
+	if direction != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE consignment_proposals
+			SET direction = $2, updated_at = now()
+			WHERE id = $1
+		`, proposalID, direction); err != nil {
+			return nil, fmt.Errorf("update proposal direction: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM consignment_proposal_items WHERE proposal_id = $1`, proposalID); err != nil {
+		return nil, fmt.Errorf("clear existing proposal items: %w", err)
+	}
+
+	for _, item := range items {
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO consignment_proposal_items (proposal_id, product_id, qty)
+			SELECT $1, p.id, $4
+			FROM products p
+			WHERE p.id = $2 AND p.business_id = $3 AND p.is_active
+		`, proposalID, item.ProductID, businessID, item.Qty)
+		if err != nil {
+			return nil, fmt.Errorf("insert proposal item: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, domain.ErrNotFound
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit proposal items: %w", err)
 	}
 	return s.ProposalByID(ctx, proposalID)
 }

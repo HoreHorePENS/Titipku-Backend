@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -202,6 +203,89 @@ func (a *App) ListVisits(ctx context.Context, businessID uuid.UUID, filter Visit
 		return nil, 0, mapStoreError(err, "VISIT_LIST_FAILED", "unable to load visits")
 	}
 	return visits, total, nil
+}
+
+type CreateStoreVisitInput struct {
+	ClientRequestID uuid.UUID
+	ProposalID      uuid.UUID
+	BusinessID      uuid.UUID
+	VisitedAt       *time.Time
+	ReceivedBy      string
+	Items           []VisitItemInput
+	Payment         *VisitPaymentInput
+}
+
+// CreateStoreVisit memungkinkan pemilik toko menerbitkan nota digital langsung untuk penitip mitra.
+func (a *App) CreateStoreVisit(ctx context.Context, actor Actor, input CreateStoreVisitInput) (*domain.Visit, error) {
+	if !actor.IsStoreOwner() {
+		return nil, apperror.Forbidden("STORE_OWNER_REQUIRED", "only store owners can create store visits")
+	}
+	storeID, err := a.myStoreID(ctx, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	businessID := input.BusinessID
+	if input.ProposalID != uuid.Nil {
+		proposal, _, err := a.proposalForActor(ctx, actor, input.ProposalID)
+		if err != nil {
+			return nil, err
+		}
+		if proposal.StoreID != storeID {
+			return nil, apperror.Forbidden("NOT_YOUR_PROPOSAL", "proposal belongs to another store")
+		}
+		businessID = proposal.BusinessID
+	}
+	if businessID == uuid.Nil {
+		return nil, apperror.Validation(map[string]string{"business_id": "is required"})
+	}
+
+	partner, err := a.store.PartnerByStoreID(ctx, businessID, storeID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, apperror.NotFound("PARTNER_NOT_FOUND", "partnership does not exist for this store and business")
+		}
+		return nil, mapStoreError(err, "PARTNER_LOOKUP_FAILED", "unable to lookup partner")
+	}
+
+	memberID, err := a.store.OwnerMemberByBusinessID(ctx, businessID)
+	if err != nil {
+		return nil, mapStoreError(err, "MEMBER_LOOKUP_FAILED", "unable to lookup business member")
+	}
+
+	receivedBy := input.ReceivedBy
+	if strings.TrimSpace(receivedBy) == "" {
+		store, _ := a.store.StoreByID(ctx, storeID, nil)
+		if store != nil {
+			receivedBy = store.Name
+		}
+	}
+
+	clientRequestID := input.ClientRequestID
+	if clientRequestID == uuid.Nil {
+		clientRequestID = uuid.New()
+	}
+
+	return a.CreateVisit(ctx, businessID, memberID, CreateVisitInput{
+		ClientRequestID: clientRequestID,
+		PartnerID:       partner.ID,
+		VisitedAt:       input.VisitedAt,
+		ReceivedBy:      receivedBy,
+		Items:           input.Items,
+		Payment:         input.Payment,
+	})
+}
+
+// ListStoreVisits mengambil riwayat kunjungan dan nota toko milik pemilik toko.
+func (a *App) ListStoreVisits(ctx context.Context, actor Actor, limit, offset int) ([]domain.Visit, int64, error) {
+	if !actor.IsStoreOwner() {
+		return nil, 0, apperror.Forbidden("STORE_OWNER_REQUIRED", "only store owners can list store visits")
+	}
+	storeID, err := a.myStoreID(ctx, actor.UserID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return a.store.ListStoreVisits(ctx, storeID, limit, offset)
 }
 
 func (a *App) Visit(ctx context.Context, businessID, visitID uuid.UUID) (*domain.Visit, error) {
